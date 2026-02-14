@@ -1,0 +1,20 @@
+services:
+  backend:
+    build: ./
+    container_name: ios_app_backend
+    restart: always
+    environment:
+      DATABASE_URL: "postgresql://postgres:astahealth3440@astahealth-database.clw6w66qo9az.ap-south-1.rds.amazonaws.com/hospital_db"
+      MONGO_URI: "mongodb://adyant:Adyant1234@10.0.133.219:27017/?authSource=admin"
+      TEMP_DIR: /app/temp
+      MAX_PARALLEL_WORKERS: "4"
+      NODE_ENV: production
+      TZ: Asia/Kolkata
+      JWT_SECRET: "skjabvksdbvknfsdbgkjhsabrhgvbszdxkvbsdakjbvkhwrasbvksdahb"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    ports:
+      - "6000:6000"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    working_dir: /app
+    command: ["npm", "run", "dev"]
