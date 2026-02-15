@@ -61,8 +61,8 @@ mongoose
     console.error("MongoDB Connection Error:", err);
   });
 
-app.listen(6000, () => {
-  console.log("Server is running on port 6000");
+app.listen(3000, () => {
+  console.log("Server is running on port 3000");
 });
 
 const RecentImage = require("./models/RecentImage");
