@@ -6,6 +6,7 @@ services:
     environment:
       DATABASE_URL: "postgresql://postgres:astahealth3440@astahealth-database.clw6w66qo9az.ap-south-1.rds.amazonaws.com/hospital_db"
       MONGO_URI: "mongodb://adyant:Adyant1234@10.0.133.219:27017/?authSource=admin"
+      PORT: 6000
       TEMP_DIR: /app/temp
       MAX_PARALLEL_WORKERS: "4"
       NODE_ENV: production
