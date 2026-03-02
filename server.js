@@ -1,21 +1,25 @@
 const express = require("express");
 const cors = require("cors");
-const jwt = require("jsonwebtoken");
 
+const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+
 const { exec } = require("child_process");
+
 const fs = require("fs");
 const path = require("path");
+
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
+
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
+
 const crypto = require("crypto");
 
 dotenv.config();
-// const jwt = require("jsonwebtoken");
-// require("dotenv").config();
+const PORT = process.env.PORT ?? 3000;
 
 const app = express();
 
@@ -61,8 +65,8 @@ mongoose
     console.error("MongoDB Connection Error:", err);
   });
 
-app.listen(3000, () => {
-  console.log("Server is running on port 3000");
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 const RecentImage = require("./models/RecentImage");
@@ -82,7 +86,7 @@ app.get("/test-images", async (req, res) => {
 
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-
+  
   try {
     // Find user + password hash
     const result = await pool.query(
@@ -159,16 +163,22 @@ app.get("/wards", authMiddleware, async (req, res) => {
   const orgId = req.user.org_id;
 
   try {
-    const result = await pool.query(
-      `
-            SELECT ward_id, name, type, capacity, floor
-            FROM "Ward"
-            WHERE org_id = $1
-        `,
-      [orgId],
-    );
-
-    res.json(result.rows);
+    const result = await pool.query(`
+        SELECT 
+            w.ward_id,
+            w.name,
+            w.type,
+            w.capacity,
+            w.floor,
+            COUNT(b.bed_id) FILTER (WHERE b.status = 'occupied')::INTEGER AS occupied_beds
+        FROM "Ward" w
+        LEFT JOIN "Bed" b ON w.ward_id = b.ward_id
+        WHERE w.org_id = $1
+        GROUP BY w.ward_id
+        ORDER BY w.name
+    `, [orgId]);
+    return res.json(result.rows);
+    
   } catch (err) {
     console.error("Error fetching wards:", err);
     res.status(500).json({ error: "Server error" });
@@ -341,11 +351,11 @@ app.post("/generate-video-mongo", authMiddleware, async (req, res) => {
 
         if (!res.headersSent) {
           res.json({
-            videoUrl: `http://localhost:6000/videos/${outputFileName}`,
+            videoUrl: `http://localhost:${PORT}/videos/${outputFileName}`,
           });
         }
         // Auto delete video after 10 minutes
-        const DELETE_AFTER = 10 * 60 * 1000; // 10 minutes
+        const DELETE_AFTER = 60 * 1000; // 1 minutes
 
         setTimeout(() => {
           const fullPath = path.join(videosDir, outputFileName);
@@ -364,7 +374,7 @@ app.post("/generate-video-mongo", authMiddleware, async (req, res) => {
 });
 
 app.use("/videos", express.static(path.join(__dirname, "videos")));
-//#######################################################################################################################
+
 /* =============================
    Discharge Patient API
 ============================= */
@@ -404,112 +414,256 @@ app.post("/discharge", authMiddleware, async (req, res) => {
 });
 
 /* =============================
+    Generate Mock Aadhar Number Function
+============================= */
+
+function generateMockAadhar() {
+  let aadhaar = "";
+
+   // First digit should not be 0
+   aadhaar += Math.floor(Math.random() * 9) + 1;
+   
+  // Generate remaining 11 digits
+  for (let i = 0; i < 11; i++) {
+    aadhaar += Math.floor(Math.random() * 10);
+  }
+
+  return aadhaar;
+}
+
+/* =============================
+    Check if generated Aadhar is unique in DB
+============================= */
+
+async function generateUniqueAadhar(client) {
+  while (true) {
+    const aadhaar = generateMockAadhar();
+
+    const check = await client.query(
+      `SELECT 1 FROM "Patient" WHERE "aadhar_Number" = $1 LIMIT 1`,
+      [aadhaar]
+    )
+    if (check.rowCount === 0) {
+      return aadhaar;
+    }
+  }
+}
+
+/* =============================
     Add Mock Patient API
 ============================= */
 
-// app.post("/add-patient", async (req, res) => {
-//   const { bedNumber, issueText, hospitalId, wardId } = req.body;
-//   const client = await pool.connect();
+app.post("/add-patient", async (req, res) => {
+  const { bedNumber, issueText, hospitalId, ward } = req.body;
+  const client = await pool.connect();
+  console.log("ADD PATIENT REQUEST BODY:", req.body);
 
-//   try {
-//     await client.query("BEGIN");
+  try {
+    await client.query("BEGIN");
 
-//     if (!hospitalId) {
-//       throw new Error("Hospital ID is required");
-//     }
+    if (!hospitalId) {
+      throw new Error("Hospital ID is required");
+    }
+    const hospital_id = await client.query(
+      `
+      SELECT org_id
+      FROM "Ward"
+      WHERE ward_id = $1
+      `,
+      [ward]
+    );
+    const hospital = hospital_id.rows[0].org_id;
+    
+    const patientId = crypto.randomUUID();
+    const aadhaar = await generateUniqueAadhar(client);
+    // 2️⃣ Create Mock Patient (let DB generate id + timestamps)
+    const patientInsert = await client.query(
+      `
+      INSERT INTO "Patient" (
+        id,
+        hospital_id,
+        name,
+        dob,
+        "genderId",
+        "aadhar_Number",
+        phone_number
+      )
+      VALUES (
+        $1,
+        $2,
+        'Jane Smith',
+        '2000-01-01',
+        1,
+        $3,
+        '7974321543'
+      )
+      RETURNING id
+      `,
+      [patientId, hospital, aadhaar]
+    );
+    const allergyId = crypto.randomUUID();
+    // 3️⃣ Create Allergy (let DB generate allergy_id)
+    const allergyInsert = await client.query(
+      `
+      INSERT INTO "Allergy" (
+        allergy_id,
+        name,
+        description,
+        severity
+      )
+      VALUES (
+        $1,
+        'Custom Issue',
+        $2,
+        'Unknown'
+      )
+      RETURNING allergy_id
+      `,
+      [allergyId, issueText]
+    );
+    const patientAllergyId = crypto.randomUUID();
+    // 4️⃣ Create PatientAllergy relation
+    await client.query(
+      `
+      INSERT INTO "PatientAllergy" (
+        pa_id,
+        patient_id,
+        allergy_id
+      )
+      VALUES ($1, $2, $3)
+      `,
+      [patientAllergyId, patientId, allergyId]
+    );
 
-//     const patientId = crypto.randomUUID();
+    // 5️⃣ Assign Bed
+    const bedUpdate = await client.query(
+    `
+    UPDATE "Bed"
+    SET patient_id = $1,
+        status = 'occupied'
+    WHERE bed_number = $2
+        AND ward_id = $3
+        AND patient_id IS NULL
+    RETURNING *
+    `,
+    [patientId, bedNumber, ward]
+    );
 
-//     // 2️⃣ Create Mock Patient (let DB generate id + timestamps)
-//     const patientInsert = await client.query(
-//       `
-//       INSERT INTO "Patient" (
-//         id,
-//         hospital_id,
-//         name,
-//         dob,
-//         "genderId",
-//         "aadhar_Number",
-//         phone_number
-//       )
-//       VALUES (
-//         $1,
-//         $2,
-//         'Jane Smith',
-//         '2000-01-01',
-//         1,
-//         '000003200000',
-//         '9999999999'
-//       )
-//       RETURNING id
-//       `,
-//       [patientId, hospitalId]
-//     );
-//     const allergyId = crypto.randomUUID();
-//     // 3️⃣ Create Allergy (let DB generate allergy_id)
-//     const allergyInsert = await client.query(
-//       `
-//       INSERT INTO "Allergy" (
-//         allergy_id,
-//         name,
-//         description,
-//         severity
-//       )
-//       VALUES (
-//         $1,
-//         'Custom Issue',
-//         $2,
-//         'Unknown'
-//       )
-//       RETURNING allergy_id
-//       `,
-//       [allergyId, issueText]
-//     );
-//     const patientAllergyId = crypto.randomUUID();
-//     // 4️⃣ Create PatientAllergy relation
-//     await client.query(
-//       `
-//       INSERT INTO "PatientAllergy" (
-//         pa_id,
-//         patient_id,
-//         allergy_id
-//       )
-//       VALUES ($1, $2, $3)
-//       `,
-//       [patientAllergyId, patientId, allergyId]
-//     );
+    if (bedUpdate.rowCount === 0) {
+    throw new Error("Bed already occupied or not found in this ward");
+    }
 
-//     // 5️⃣ Assign Bed
-//     const bedUpdate = await client.query(
-//     `
-//     UPDATE "Bed"
-//     SET patient_id = $1,
-//         status = 'occupied'
-//     WHERE bed_number = $2
-//         AND ward_id = $3
-//         AND patient_id IS NULL
-//     RETURNING *
-//     `,
-//     [patientId, bedNumber, wardId]
-//     );
+    await client.query("COMMIT");
 
-//     if (bedUpdate.rowCount === 0) {
-//     throw new Error("Bed already occupied or not found in this ward");
-//     }
+    res.json({
+      message: "Patient added successfully",
+      patientId: patientId
+    });
 
-//     await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("🔥 ADD PATIENT FULL ERROR:");
+    console.error("ADD PATIENT ERROR:", err);
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+});
 
-//     res.json({
-//       message: "Patient added successfully",
-//       patientId: patientId
-//     });
+/* =============================
+    Get Patient Vitals API
+============================= */
 
-//   } catch (err) {
-//     await client.query("ROLLBACK");
-//     console.error("🔥 ADD PATIENT FULL ERROR:");
-//     console.error("ADD PATIENT ERROR:", err);
-//     res.status(500).json({ error: err.message });
-//   } finally {
-//     client.release();
-//   }
-// });
+app.get("/patient-details/:patientId", authMiddleware, async (request, response) => {
+  const { patientId } = request.params;
+
+  let range = request.query.range || "24h";
+
+  switch (range) {
+    case "7d":
+      interval = "7 days";
+      break;
+    case "30d":
+      interval = "30 days";
+      break;
+    case "24h":
+      interval = "24 hours";
+      break;
+    default:
+      interval = "24 hours";
+  }
+  try {
+    const query = `
+      WITH bounds AS (
+        SELECT
+          NOW() AS end_time,
+          NOW() - $2::interval AS start_time
+      ),
+      time_slots AS (
+        SELECT generate_series(
+          (SELECT start_time FROM bounds),
+          (SELECT end_time FROM bounds),
+          ($2::interval / 1000)
+        ) AS slot_time
+      )
+      SELECT
+          v."heartRate",
+          v."SpO2",
+          v."NBPSystolic",
+          v."NBPDiastolic",
+          v."NBPMap",
+          v."respirationRate",
+          v."pulse",
+          v."PVC",
+          v."updated_at",
+          EXTRACT(EPOCH FROM ts.slot_time) * 1000 AS timestamp
+      FROM time_slots ts
+      LEFT JOIN LATERAL (
+          SELECT *
+          FROM public."Vitals"
+          WHERE "patientId" = $1
+            AND "updated_at" >= ts.slot_time
+            AND "updated_at" < ts.slot_time + ($2::interval / 1000)
+          ORDER BY "updated_at" ASC
+          LIMIT 1
+      ) v ON TRUE
+      ORDER BY ts.slot_time ASC;
+    `;
+
+    let result = await pool.query(query, [patientId, interval]);
+
+    if (result.rows.length === 0) {
+      result = await pool.query(`
+      SELECT 
+        "heartRate",
+        "SpO2",
+        "NBPSystolic",
+        "NBPDiastolic",
+        "NBPMap",
+        "respirationRate",
+        "pulse",
+        "PVC",
+        "updated_at",
+        EXTRACT(EPOCH FROM "updated_at") * 1000 AS timestamp
+      FROM public."Vitals"
+      WHERE "patientId" = $1
+      ORDER BY "updated_at" DESC
+      LIMIT 1000
+  `, [patientId]);
+    }
+
+    response.json({
+      range: range,
+      count: result.rows.length,
+      data: result.rows
+    });
+
+  } catch (error) {
+    console.error("Fetch vitals error:", error);
+    console.error("Error fetching patient details:", error);
+
+    response.status(500).json({ 
+      error: "Internal server error" 
+    });
+  }
+})      
