@@ -1,0 +1,5 @@
+JWT_SECRET=super_secure_hospital_key
+
+PORT = 6000
+
+MONGO_URI=mongodb://adyant:Adyant1234@10.0.133.219:27017/?authSource=admin
