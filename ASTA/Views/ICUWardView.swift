@@ -56,6 +56,11 @@ struct ICUWardView: View {
             }
             .task {
                 await vm.fetchWardDetails(wardId: ward.ward_id)
+                Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
+                    Task {
+                        await vm.fetchWardDetails(wardId: ward.ward_id)
+                    }
+                }
             }
             
         }

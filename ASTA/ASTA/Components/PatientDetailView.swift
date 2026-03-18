@@ -137,7 +137,7 @@ struct PatientDetailView: View {
             VStack {
                 Spacer()
                 if let imageString = patient.image,
-                   let url = URL(string: imageString) {
+                   let url = URL(string: "\(imageString)?t=\(Date().timeIntervalSince1970)") {
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .empty:

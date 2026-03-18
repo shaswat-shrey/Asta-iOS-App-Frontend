@@ -218,7 +218,7 @@ struct GenerateVideoView: View {
                 return
         }
 
-        guard let url = URL(string: "http://localhost:3000/generate-video-mongo") else {
+        guard let url = URL(string: "https://ios-backend.astahealthtech.net/generate-video-mongo") else {
             errorMessage = "Invalid backend URL"
             return
         }

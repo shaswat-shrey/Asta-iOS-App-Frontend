@@ -7,10 +7,10 @@ import SwiftUI
 struct LoginView: View {
     
     @State private var isPasswordVisible: Bool = false
-    @Binding var isLoggedIn: Bool
+//    @Binding var isLoggedIn: Bool
     
-    @StateObject private var vm = LoginViewModel()
-    
+//    @StateObject private var vm = LoginViewModel()
+    @EnvironmentObject var loginVM: LoginViewModel
     var body: some View {
         
         NavigationStack {
@@ -69,7 +69,7 @@ struct LoginView: View {
                             .foregroundColor(.black)
                         
                         ZStack(alignment: .leading) {
-                            if vm.email.isEmpty {
+                            if loginVM.email.isEmpty {
                                 Text("Enter your username")
                                     .foregroundColor(.black.opacity(0.6))
                                     .fontDesign(Font.Design.rounded)
@@ -80,7 +80,7 @@ struct LoginView: View {
                                 Image(systemName: "envelope")
                                     .foregroundColor(.orange)
                                 
-                                TextField("", text: $vm.email)
+                                TextField("", text: $loginVM.email)
                                     .foregroundColor(.black)
                                     .keyboardType(.emailAddress)
                                     .autocapitalization(.none)
@@ -99,7 +99,7 @@ struct LoginView: View {
                             .foregroundColor(.black)
                         
                         ZStack(alignment: .leading) {
-                            if vm.password.isEmpty {
+                            if loginVM.password.isEmpty {
                                 Text("Enter your password")
                                     .fontDesign(Font.Design.rounded)
                                     .foregroundColor(.black.opacity(0.6))
@@ -112,11 +112,11 @@ struct LoginView: View {
                                 
                                 Group {
                                     if isPasswordVisible {
-                                        TextField("", text: $vm.password)
+                                        TextField("", text: $loginVM.password)
                                             .textInputAutocapitalization(.never)
                                             .autocorrectionDisabled(true)
                                     } else {
-                                        SecureField("", text: $vm.password)
+                                        SecureField("", text: $loginVM.password)
                                             .textInputAutocapitalization(.never)
                                             .autocorrectionDisabled(true)
                                     }
@@ -145,10 +145,11 @@ struct LoginView: View {
                     // MARK: - Sign In Button
                     Button {
                         Task {
-                            await vm.login()
-                            if vm.isLoggedIn {
-                                isLoggedIn = true
-                            }
+//                            await vm.login()
+//                            if vm.isLoggedIn {
+//                                isLoggedIn = true
+//                            }
+                            await loginVM.login()
                         }
                     } label: {
                         Text("Sign In")
@@ -167,7 +168,7 @@ struct LoginView: View {
                             .cornerRadius(30/2)
                     }
                     .padding(.top, 15)
-                    if let error = vm.errorMessage {
+                    if let error = loginVM.errorMessage {
                         Text(error)
                             .foregroundColor(.red)
                             .font(.caption)

@@ -14,6 +14,24 @@ class LoginViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
     
+    private let sessionDuration: TimeInterval = 7 * 24 * 60 * 60
+    
+    init() {
+        self.isLoggedIn = isSessionValid()
+    }
+    
+    private func isSessionValid() -> Bool {
+        guard
+            let loginDate = UserDefaults.standard.object(forKey: "loginDate") as? Date,
+            UserDefaults.standard.string(forKey: "authToken") != nil
+        else {
+            return false
+        }
+        
+        let timeInterval = Date().timeIntervalSince(loginDate)
+        return timeInterval < sessionDuration
+    }
+    
     func login() async {
         guard let url = URL(string: "https://ios-backend.astahealthtech.net/login") else { return }
         
@@ -44,6 +62,7 @@ class LoginViewModel: ObservableObject {
             let loginResponse = try JSONDecoder().decode(LoginResponse.self, from: data)
 
             UserDefaults.standard.set(loginResponse.token, forKey: "authToken")
+            UserDefaults.standard.set(Date(), forKey: "loginDate")
             self.isLoggedIn = true
             self.errorMessage = nil
             self.isLoading = false
@@ -52,6 +71,15 @@ class LoginViewModel: ObservableObject {
             self.isLoggedIn = false
             self.isLoading = false
         }
+    }
+    
+    func logout() {
+        UserDefaults.standard.removeObject(forKey: "authToken")
+        UserDefaults.standard.removeObject(forKey: "loginDate")
+        UserDefaults.standard.removeObject(forKey: "userId")
+        UserDefaults.standard.removeObject(forKey: "orgId")
+        UserDefaults.standard.removeObject(forKey: "wardId")
+        self.isLoggedIn = false
     }
 }
 

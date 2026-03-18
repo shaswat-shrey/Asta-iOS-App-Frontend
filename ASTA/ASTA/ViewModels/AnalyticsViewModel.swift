@@ -72,7 +72,13 @@ class AnalyticsViewModel: ObservableObject {
                 return
             }
             
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                errorMessage = "Server error"
+                return
+            }
             
             let decoded = try JSONDecoder().decode(PatientVitalsResponse.self, from: data)
             

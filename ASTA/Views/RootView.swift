@@ -6,14 +6,15 @@ import SwiftUI
 
 struct RootView: View {
 
-    @State private var isLoggedIn =
-        UserDefaults.standard.string(forKey: "userId") != nil
+    @StateObject private var loginVM = LoginViewModel()
 
     var body: some View {
-        if isLoggedIn {
-            WardView(isLoggedIn: $isLoggedIn)
+        if loginVM.isLoggedIn {
+            WardView()
+                .environmentObject(loginVM)
         } else {
-            LoginView(isLoggedIn: $isLoggedIn)
+            LoginView()
+                .environmentObject(loginVM)
         }
     }
 }

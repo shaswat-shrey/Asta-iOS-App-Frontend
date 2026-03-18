@@ -6,15 +6,17 @@
 import SwiftUI
 
 struct WardView: View {
-
+    @EnvironmentObject var loginVM: LoginViewModel
     @StateObject private var vm = WardViewModel()
     @State private var selectedWard: Ward?
-    @Binding var isLoggedIn: Bool
+    @State private var showMenu: Bool = false
+    @State private var allowNotifications: Bool = false
+//    @Binding var isLoggedIn: Bool
     
     @State private var goToAssitant: Bool = false
-
+    
     var body: some View {
-
+        
         NavigationStack {
             ZStack {
                 LinearGradient(
@@ -26,7 +28,7 @@ struct WardView: View {
                     endPoint: .bottomTrailing
                 )
                 .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     
                     // 🔹 Scrollable Content
@@ -53,51 +55,83 @@ struct WardView: View {
                     }
                     
                     // 🔹 Static Assistant Button (fixed at bottom)
-                    HStack {
-                        ButtonView(title: "Assistant") {
-                            goToAssitant = true
-                        }
+                    //                    HStack {
+                    //                        ButtonView(title: "Assistant") {
+                    //                            goToAssitant = true
+                    //                        }
+                    //                    }
+                    //                    .padding(.vertical, 16)
+                    //                    .padding(.horizontal, 20)
+                    //                }
+                    //                .navigationDestination(isPresented: $goToAssitant) {
+                    //                    AIChatView()
+                    //                }
+                }
+                
+                .onAppear {
+                    Task {
+                        await vm.fetchWards()
                     }
-                    .padding(.vertical, 16)
-                    .padding(.horizontal, 20)
                 }
-                .navigationDestination(isPresented: $goToAssitant) {
-                    AIChatView()
+                .navigationDestination(item: $selectedWard) { ward in
+                    ICUWardView(ward: ward)
                 }
-            }
-            
-            .onAppear {
-                Task {
-                    await vm.fetchWards()
-                }
-            }
-            .navigationDestination(item: $selectedWard) { ward in
-                ICUWardView(ward: ward)
-            }
-            .navigationBarBackButtonHidden(true)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Ward View")
-                        .font(.headline)
-                        .foregroundColor(.black)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                            UserDefaults.standard.removeObject(forKey: "userId")
-                            UserDefaults.standard.removeObject(forKey: "orgId")
-                            UserDefaults.standard.removeObject(forKey: "wardId")
-                            isLoggedIn = false
+                .navigationBarBackButtonHidden(true)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .principal) {
+                        Text("Ward View")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            loginVM.logout()
                         } label: {
                             Text("Sign Out")
                                 .foregroundColor(.red)
                         }
                         .buttonStyle(.plain)          // removes system style
                         .tint(.clear)                 // prevents tint background
+                    }
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            showMenu.toggle()
+                        } label: {
+                            Image(systemName: "line.3.horizontal")
+                        }
+                        .buttonStyle(.plain)
+                        .tint(.clear)
+                        .popover(isPresented: $showMenu) {
+                            HStack {
+                                Label("Notifications", systemImage: "bell")
+                                Spacer()
+                                Toggle("", isOn: $allowNotifications)
+                                    .labelsHidden()
+                                    .tint(.red)
+                            }
+                            .padding()
+                            .frame(width: 240)
+                            .presentationCompactAdaptation(.popover)
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+//struct MenuPanelView: View {
+//    @Binding var allowNotifications: Bool
+//
+//    var body: some View {
+//        Toggle("Notifications", isOn: $allowNotifications)
+//            .padding()
+//            .background(Color.white)
+//            .cornerRadius(15)
+//            .shadow(radius: 10)
+//            .frame(width: 220)
+//    }
+//}
